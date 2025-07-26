@@ -1,0 +1,56 @@
+# --- Docker Compose para el entorno de datos del proyecto Aipha ---
+# Versión de la especificación de Docker Compose. '3.8' es moderna y estable.
+# Definición de nuestros servicios (contenedores)
+services:
+
+  # Servicio 1: Base de Datos PostgreSQL
+  # La usaremos para datos relacionales, series temporales (con TimescaleDB, si lo decidimos)
+  # y datos vectoriales (con la extensión pg_vector).
+  db:
+    image: postgres:15-alpine  # Usamos la imagen oficial de Postgres 15, versión 'alpine' por ser muy ligera.
+    container_name: aipha_postgres_db
+    restart: unless-stopped # Reinicia el contenedor si se detiene, a menos que lo detengamos nosotros manualmente.
+    environment:
+      # Estas son las credenciales para la base de datos.
+      # ¡IMPORTANTE! En un entorno de producción, esto se manejaría con secrets.
+      POSTGRES_USER: aipha_user
+      POSTGRES_PASSWORD: aipha_password__change_me
+      POSTGRES_DB: aipha_db
+    ports:
+      # Mapea el puerto 5432 del contenedor al puerto 5432 de nuestra máquina local (host).
+      # Formato: "HOST:CONTAINER"
+      - "5432:5432"
+    volumes:
+      # Crea un 'volumen nombrado' para que los datos de la base de datos persistan
+      # incluso si eliminamos y recreamos el contenedor. Es crucial para no perder datos.
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - aipha_net
+
+  # Servicio 2: Cache de alta velocidad Redis
+  # Lo usaremos para datos volátiles y de acceso rápido, como libros de órdenes,
+  # colas de mensajes o estados temporales.
+  cache:
+    image: redis:7-alpine # Imagen oficial de Redis, versión 'alpine' por su ligereza.
+    container_name: aipha_redis_cache
+    restart: unless-stopped
+    ports:
+      # Mapea el puerto 6379 de Redis al de nuestra máquina local.
+      - "6379:6379"
+    volumes:
+      # Volumen nombrado para la persistencia de Redis, si se configura para ello.
+      - redis_data:/data
+    networks:
+      - aipha_net
+
+# Definición de las redes personalizadas.
+# Usar una red propia es una mejor práctica que usar la red por defecto.
+networks:
+  aipha_net:
+    driver: bridge
+
+# Definición de los volúmenes nombrados que declaramos arriba.
+# Docker se encarga de gestionarlos.
+volumes:
+  postgres_data:
+  redis_data:

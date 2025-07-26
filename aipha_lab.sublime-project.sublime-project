@@ -1,0 +1,17 @@
+{
+    "folders":
+    [
+        {
+            "path": "."
+        }
+    ],
+    "settings":
+    {
+        "LSP":
+        {
+            // Esta es la configuración que anula todo lo demás.
+            // Es la instrucción más directa que le podemos dar a LSP.
+            "lsp_nodejs_path": "/home/vaclav/.nvm/versions/node/v22.17.1/bin/node"
+        }
+    }
+}

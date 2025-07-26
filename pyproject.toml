@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "aipha"
+version = "0.1.0"
+description = "Sistema de trading algorítmico y análisis de datos basado en IA."
+authors = ["Vaclav <arturcloe2084@gmail.com>"]
+readme = "README.md"
+packages = [{include = "aipha"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+requests = "^2.31.0"  # Versión añadida por poetry add
+pydantic = "^2.0.3"  # Versión añadida por poetry add
+
+[tool.poetry.group.dev.dependencies]
+ipython = "^8.14.0"
+pytest = "^7.4.0"    # Versión añadida por poetry add
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
