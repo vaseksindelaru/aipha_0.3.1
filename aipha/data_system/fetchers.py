@@ -130,12 +130,12 @@ class BinanceKlinesFetcher:
                 zip_content = local_zip_path.read_bytes()
             else:
                 logger.info(f"Descargando datos para {endpoint}...")
-                # TODO: El método `make_request` del ApiClient actual devuelve JSON.
-                # Se necesita un método o parámetro para obtener el contenido binario (`response.content`).
-                # Por ahora, asumimos que puede devolver `bytes` para continuar con la lógica.
+                # Llamada actualizada para obtener contenido binario directamente,
+                # gracias al nuevo parámetro en ApiClient.
                 response_content = self._api_client.make_request(
                     method="GET",
                     endpoint=endpoint,
+                    parse_json=False,
                 )
 
                 if isinstance(response_content, bytes):
@@ -167,4 +167,3 @@ class BinanceKlinesFetcher:
             f"desde {final_df['Open time'].min()} hasta {final_df['Close time'].max()}"
         )
         return final_df
-

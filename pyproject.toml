@@ -10,6 +10,7 @@ packages = [{include = "aipha"}]
 python = "^3.11"
 requests = "^2.31.0"  # Versión añadida por poetry add
 pydantic = "^2.0.3"  # Versión añadida por poetry add
+pandas = "^2.3.1"
 
 [tool.poetry.group.dev.dependencies]
 ipython = "^8.14.0"
