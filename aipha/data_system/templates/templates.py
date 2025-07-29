@@ -126,3 +126,25 @@ class KlinesDataRequestTemplate(BaseDataRequestTemplate):
             raise ValueError("start_date no puede ser posterior a end_date")
         return self
 
+
+@register_template("trades")
+class TradesDataRequestTemplate(BaseDataRequestTemplate):
+    """Plantilla para solicitar datos de transacciones (Trades)."""
+
+    name: str
+    symbol: str
+    start_date: date
+    end_date: date
+    description: Optional[str] = None
+
+    @field_validator("symbol")
+    def symbol_to_uppercase(cls, v: str) -> str:
+        """Convierte el símbolo del par de trading a mayúsculas."""
+        return v.upper()
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> "TradesDataRequestTemplate":
+        """Valida que la fecha de inicio no sea posterior a la fecha de fin."""
+        if self.start_date > self.end_date:
+            raise ValueError("start_date no puede ser posterior a end_date")
+        return self

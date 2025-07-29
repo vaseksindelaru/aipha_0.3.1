@@ -15,7 +15,13 @@ pandas = "^2.3.1"
 [tool.poetry.group.dev.dependencies]
 ipython = "^8.14.0"
 pytest = "^7.4.0"    # Versión añadida por poetry add
+requests-mock = "^1.12.1"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: marca las pruebas como pruebas de integración (lentas, requieren red)",
+]

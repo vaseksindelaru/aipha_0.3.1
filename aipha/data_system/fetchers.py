@@ -4,166 +4,129 @@ como APIs o archivos. Estas clases, o "Fetchers", actúan como el primer eslabó
 en la cadena de adquisición de datos.
 """
 
-import io
 import logging
-import zipfile
 from datetime import date, timedelta
 from pathlib import Path
-from typing import List, Optional
-
-import pandas as pd
+from typing import List
 
 from aipha.data_system.api_client import ApiClient
-from aipha.data_system.templates.templates import KlinesDataRequestTemplate
+from aipha.data_system.templates.templates import (
+    BaseDataRequestTemplate,
+    KlinesDataRequestTemplate,
+    TradesDataRequestTemplate,
+)
 
 logger = logging.getLogger(__name__)
 
 
-class BinanceKlinesFetcher:
+class BinanceVisionFetcher:
     """
-    Obtiene datos de velas (Klines) desde el repositorio de datos históricos de Binance Vision.
+    Descarga archivos de datos desde el repositorio de Binance Vision.
 
-    Esta clase se encarga de descargar archivos ZIP diarios que contienen los datos de klines
-    para un par de símbolos y un intervalo específicos. Implementa una estrategia de caché
-    local para evitar descargas repetidas.
+    Esta clase es responsable de tomar una plantilla de datos (klines, trades, etc.),
+    construir las URLs correctas para cada día en el rango de fechas, y asegurar
+    que los archivos ZIP correspondientes estén descargados en una caché local.
 
-    Utiliza un ApiClient para las peticiones HTTP y un KlinesDataRequestTemplate para
-    definir los parámetros de la solicitud de datos.
+    Su única responsabilidad es la descarga, no el procesamiento del contenido.
     """
-
-    # Columnas estándar para los archivos CSV de klines de Binance Vision.
-    KLINES_COLUMNS = [
-        "Open time", "Open", "High", "Low", "Close", "Volume",
-        "Close time", "Quote asset volume", "Number of trades",
-        "Taker buy base asset volume", "Taker buy quote asset volume", "Ignore"
-    ]
 
     def __init__(
         self,
         api_client: ApiClient,
         download_dir: str,
-        binance_vision_base_url: str = "https://data.binance.vision/data/spot/daily/klines",
+        binance_vision_base_url: str = "https://data.binance.vision/data/spot/daily/",
     ):
         """
-        Inicializa el fetcher de Klines de Binance.
+        Inicializa el fetcher de Binance Vision.
 
         Args:
             api_client (ApiClient): Una instancia de ApiClient para realizar las peticiones.
             download_dir (str): El directorio raíz donde se guardarán los datos cacheados.
-            binance_vision_base_url (str): La URL base de Binance Vision para klines diarias.
+            binance_vision_base_url (str): La URL base de Binance Vision para datos diarios.
         """
         self._api_client = api_client
-        # Usamos pathlib para una gestión de rutas moderna y robusta.
         self.download_dir = Path(download_dir)
-        self._api_client.base_url = binance_vision_base_url
+        self._api_client.base_url = binance_vision_base_url.rstrip("/")
         logger.info(
-            f"BinanceKlinesFetcher inicializado. Directorio de caché: {self.download_dir}"
+            f"BinanceVisionFetcher inicializado. Directorio de caché: {self.download_dir}"
         )
 
-    def _build_endpoint(self, symbol: str, interval: str, a_date: date) -> str:
-        """Construye el endpoint de la API para un día específico."""
+    def _build_endpoint(self, template: BaseDataRequestTemplate, a_date: date) -> str:
+        """
+        Construye el endpoint de la API para un tipo de dato y día específicos.
+
+        Inspecciona el tipo de plantilla para construir la ruta correcta.
+
+        Args:
+            template (BaseDataRequestTemplate): La plantilla que define los datos.
+            a_date (date): La fecha específica para la que se construye el endpoint.
+
+        Returns:
+            str: El endpoint relativo para la petición a la API.
+
+        Raises:
+            TypeError: Si se proporciona un tipo de plantilla no soportado.
+        """
         date_str = a_date.strftime("%Y-%m-%d")
-        # Ej: 'BTCUSDT/1d/BTCUSDT-1d-2023-01-01.zip'
-        return f"{symbol}/{interval}/{symbol}-{interval}-{date_str}.zip"
+        symbol = template.symbol
 
-    def _process_zip_content(self, zip_content: bytes) -> Optional[pd.DataFrame]:
+        if isinstance(template, KlinesDataRequestTemplate):
+            interval = template.interval
+            # Ej: 'klines/BTCUSDT/1d/BTCUSDT-1d-2023-01-01.zip'
+            return f"klines/{symbol}/{interval}/{symbol}-{interval}-{date_str}.zip"
+        elif isinstance(template, TradesDataRequestTemplate):
+            # Ej: 'trades/BTCUSDT/BTCUSDT-trades-2023-01-01.zip'
+            return f"trades/{symbol}/{symbol}-trades-{date_str}.zip"
+        else:
+            raise TypeError(
+                f"Tipo de plantilla no soportado por BinanceVisionFetcher: {type(template).__name__}"
+            )
+
+    def ensure_data_is_downloaded(
+        self, template: BaseDataRequestTemplate
+    ) -> List[Path]:
         """
-        Procesa el contenido binario de un archivo ZIP para extraer y limpiar los datos del CSV.
+        Asegura que los datos para el template y rango de fechas estén en la caché local.
+
+        Itera día por día, y si un archivo no existe localmente, lo descarga.
+        Devuelve una lista de las rutas locales a todos los archivos solicitados.
 
         Args:
-            zip_content (bytes): El contenido binario del archivo .zip descargado.
+            template (BaseDataRequestTemplate): El contrato de datos que define qué buscar.
 
         Returns:
-            Optional[pd.DataFrame]: Un DataFrame con los datos de klines procesados,
-                                    o None si el contenido del ZIP es inválido.
+            List[Path]: Una lista de objetos Path apuntando a los archivos ZIP locales.
         """
-        try:
-            # Usamos io.BytesIO para tratar el contenido binario como un archivo en memoria.
-            with zipfile.ZipFile(io.BytesIO(zip_content)) as z:
-                # Asumimos que cada ZIP contiene un único archivo CSV.
-                csv_filename = z.namelist()[0]
-                with z.open(csv_filename) as csv_file:
-                    df = pd.read_csv(csv_file, header=None, names=self.KLINES_COLUMNS)
-
-            # --- Limpieza y tipado de datos ---
-            df = df.drop(columns=["Ignore"])
-            df["Open time"] = pd.to_datetime(df["Open time"], unit="ms")
-            df["Close time"] = pd.to_datetime(df["Close time"], unit="ms")
-
-            numeric_cols = ["Open", "High", "Low", "Close", "Volume", "Quote asset volume",
-                            "Taker buy base asset volume", "Taker buy quote asset volume"]
-            df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors='coerce')
-            df["Number of trades"] = df["Number of trades"].astype(int)
-
-            return df
-
-        except (zipfile.BadZipFile, IndexError, KeyError) as e:
-            logger.error(f"No se pudo procesar el contenido del archivo ZIP: {e}")
-            return None
-
-    def fetch_klines_as_dataframe(
-        self, template: KlinesDataRequestTemplate
-    ) -> Optional[pd.DataFrame]:
-        """
-        Obtiene los datos de klines para el rango de fechas especificado en el template.
-
-        Itera día por día, descarga los datos si no están en la caché local,
-        los procesa y los concatena en un único DataFrame.
-
-        Args:
-            template (KlinesDataRequestTemplate): El contrato de datos que define qué buscar.
-
-        Returns:
-            Optional[pd.DataFrame]: Un DataFrame con todos los datos solicitados,
-                                    ordenados por fecha, o None si no se encontraron datos.
-        """
-        all_daily_dfs: List[pd.DataFrame] = []
+        requested_files: List[Path] = []
         current_date = template.start_date
 
         while current_date <= template.end_date:
-            endpoint = self._build_endpoint(template.symbol, template.interval, current_date)
-            local_zip_path = self.download_dir / endpoint
-            zip_content: Optional[bytes] = None
+            try:
+                endpoint = self._build_endpoint(template, current_date)
+                local_zip_path = self.download_dir / endpoint
+                requested_files.append(local_zip_path)
 
-            if local_zip_path.exists():
-                logger.info(f"Usando caché local para {endpoint}")
-                zip_content = local_zip_path.read_bytes()
-            else:
-                logger.info(f"Descargando datos para {endpoint}...")
-                # Llamada actualizada para obtener contenido binario directamente,
-                # gracias al nuevo parámetro en ApiClient.
-                response_content = self._api_client.make_request(
-                    method="GET",
-                    endpoint=endpoint,
-                    parse_json=False,
-                )
-
-                if isinstance(response_content, bytes):
-                    zip_content = response_content
-                    # Crear directorios padres si no existen y guardar el archivo en caché.
-                    local_zip_path.parent.mkdir(parents=True, exist_ok=True)
-                    local_zip_path.write_bytes(zip_content)
-                    logger.info(f"Guardado en caché: {local_zip_path}")
+                if local_zip_path.exists():
+                    logger.debug(f"Usando caché local para {endpoint}")
                 else:
-                    logger.warning(f"No se pudo descargar el contenido para {endpoint}. Se omite este día.")
+                    logger.info(f"Descargando datos para {endpoint}...")
+                    response_content = self._api_client.make_request(
+                        method="GET", endpoint=endpoint, parse_json=False
+                    )
 
-            if zip_content:
-                daily_df = self._process_zip_content(zip_content)
-                if daily_df is not None:
-                    all_daily_dfs.append(daily_df)
+                    if isinstance(response_content, bytes):
+                        local_zip_path.parent.mkdir(parents=True, exist_ok=True)
+                        local_zip_path.write_bytes(response_content)
+                        logger.info(f"Guardado en caché: {local_zip_path}")
+                    else:
+                        logger.warning(
+                            f"No se pudo descargar {endpoint}. Se omite este día."
+                        )
+            except TypeError as e:
+                logger.error(e)
+                return []  # Devolver lista vacía si el template no es válido
 
             current_date += timedelta(days=1)
 
-        if not all_daily_dfs:
-            logger.warning(f"No se encontraron datos para el template '{template.name}'")
-            return None
-
-        # Concatenar todos los DataFrames diarios en uno solo.
-        final_df = pd.concat(all_daily_dfs, ignore_index=True)
-        final_df = final_df.sort_values(by="Open time").reset_index(drop=True)
-
-        logger.info(
-            f"Se obtuvieron {len(final_df)} klines para el template '{template.name}' "
-            f"desde {final_df['Open time'].min()} hasta {final_df['Close time'].max()}"
-        )
-        return final_df
+        logger.info(f"Verificación de datos completada para el template '{template.name}'.")
+        return requested_files
