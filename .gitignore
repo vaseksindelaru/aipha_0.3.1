@@ -1,0 +1,42 @@
+# Archivos de entorno y secretos
+# ¡NUNCA SUBIR EL .env A GIT!
+.env
+
+# Entornos virtuales
+# Poetry crea esto si virtualenvs.in-project es true
+.venv/
+# Ignorar la caché de entornos virtuales global de Poetry
+.poetry/virtualenvs/
+
+# Archivos generados por Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Archivos de distribución y construcción
+build/
+dist/
+*.egg-info/
+
+# Archivos generados por VS Code
+.vscode/
+
+# Archivos generados por Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Carpetas de datos y artefactos de prueba
+# ¡CRUCIAL! Ignora la carpeta de descargas de nuestras pruebas.
+tests/temp_test_data/
+# Si tuviéramos una carpeta de descargas de producción, también la ignoraríamos
+downloaded_data/
+
+# Archivos de logs
+*.log
+
+# Bases de datos locales
+*.db
+*.sqlite3
+*.duckdb
+
