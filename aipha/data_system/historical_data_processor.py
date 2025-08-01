@@ -87,22 +87,26 @@ class HistoricalDataProcessor:
             with zipfile.ZipFile(zip_path, "r") as z:
                 csv_filename = z.namelist()[0]
                 with z.open(csv_filename) as csv_file:
+                    # Definir nombres de columna conceptuales de la fuente
+                    original_names = [
+                        "Open time", "Open", "High", "Low", "Close", "Volume",
+                        "Close time", "Quote asset volume", "Number of trades",
+                        "Taker buy base asset volume", "Taker buy quote asset volume", "Ignore",
+                    ]
                     df = pd.read_csv(
                         io.TextIOWrapper(csv_file, "utf-8"),
                         header=None,
-                        names=[
-                            "open_time", "open", "high", "low", "close", "volume",
-                            "close_time", "quote_asset_volume", "number_of_trades",
-                            "taker_buy_base_asset_volume", "taker_buy_quote_asset_volume", "ignore",
-                        ],
+                        names=original_names,
                     )
+
+            # Renombrar columnas a formato snake_case de forma programática
+            df.columns = [col.lower().replace(' ', '_') for col in df.columns]
 
             df.drop(columns=["ignore"], inplace=True)
             df["open_time"] = pd.to_datetime(df["open_time"], unit="ms")
             df["close_time"] = pd.to_datetime(df["close_time"], unit="ms")
-            df[["open", "high", "low", "close", "volume"]] = df[
-                ["open", "high", "low", "close", "volume"]
-            ].apply(pd.to_numeric, errors="coerce")
+            numeric_cols = ["open", "high", "low", "close", "volume"]
+            df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
 
             df["symbol"] = symbol
             df["interval"] = interval
@@ -121,19 +125,22 @@ class HistoricalDataProcessor:
             with zipfile.ZipFile(zip_path, "r") as z:
                 csv_filename = z.namelist()[0]
                 with z.open(csv_filename) as csv_file:
+                    original_names = [
+                        "Trade ID", "Price", "Qty", "Quote Qty", "Trade time",
+                        "Is buyer maker", "Is best match",
+                    ]
                     df = pd.read_csv(
                         io.TextIOWrapper(csv_file, "utf-8"),
                         header=None,
-                        names=[
-                            "trade_id", "price", "qty", "quote_qty", "trade_time",
-                            "is_buyer_maker", "is_best_match",
-                        ],
+                        names=original_names,
                     )
 
+            # Renombrar columnas a formato snake_case de forma programática
+            df.columns = [col.lower().replace(' ', '_') for col in df.columns]
+
             df["trade_time"] = pd.to_datetime(df["trade_time"], unit="ms")
-            df[["price", "qty", "quote_qty"]] = df[
-                ["price", "qty", "quote_qty"]
-            ].apply(pd.to_numeric, errors="coerce")
+            numeric_cols = ["price", "qty", "quote_qty"]
+            df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
             df["is_buyer_maker"] = df["is_buyer_maker"].astype(bool)
             df["is_best_match"] = df["is_best_match"].astype(bool)
             df["symbol"] = symbol
