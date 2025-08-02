@@ -7,6 +7,8 @@ import duckdb
 import pandas as pd
 from aipha.trading_flow.detectors.accumulation_zone_detector import AccumulationZoneDetector
 from aipha.trading_flow.detectors.key_candle_detector import KeyCandleDetector
+from aipha.trading_flow.detectors.trend_detector import TrendDetector
+from aipha.trading_flow.detectors.signal_combiner import SignalCombiner
 
 class SignalOrchestrator:
     """Coordina la ejecución de múltiples detectores de señales en un pipeline."""
@@ -15,10 +17,14 @@ class SignalOrchestrator:
             raise FileNotFoundError(f"La base de datos no se encuentra en: {db_path}")
         self.db_path = db_path
         self.config = config
-        self.key_candle_detector = KeyCandleDetector()
+        
+        # Instanciación de todos los detectores del pipeline
         self.accumulation_zone_detector = AccumulationZoneDetector(
             **self.config.get("accumulation_zone", {})
         )
+        self.key_candle_detector = KeyCandleDetector()
+        self.trend_detector = TrendDetector(**self.config.get("trend", {}))
+        self.signal_combiner = SignalCombiner(**self.config.get("signal_combiner", {}))
 
     def _load_data(self, symbol: str, interval: str) -> pd.DataFrame:
         """Carga los datos de k-lines desde DuckDB de forma segura."""
@@ -32,7 +38,11 @@ class SignalOrchestrator:
 
     def generate_signals(self, symbol: str, interval: str) -> pd.DataFrame:
         """
-        Ejecuta el pipeline de detección de señales: Zona de Acumulación -> Vela Clave.
+        Ejecuta el pipeline completo de detección de señales:
+        1. Zonas de Acumulación
+        2. Velas Clave
+        3. Tendencias
+        4. Combinación de Señales
         """
         df_base = self._load_data(symbol, interval)
         if df_base.empty:
@@ -42,8 +52,14 @@ class SignalOrchestrator:
         df_with_zones = self.accumulation_zone_detector.detect(df_base)
 
         # Etapa 2: Detectar Velas Clave
-        df_final = self.key_candle_detector.detect(
+        df_with_key_candles = self.key_candle_detector.detect(
             df_with_zones, **self.config.get("key_candle", {})
         )
+        
+        # Etapa 3: Detectar Tendencias
+        df_with_trends = self.trend_detector.detect(df_with_key_candles)
+        
+        # Etapa 4: Combinar Señales para la coincidencia triple
+        df_final = self.signal_combiner.detect(df_with_trends)
         
         return df_final
