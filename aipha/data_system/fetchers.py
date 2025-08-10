@@ -1,3 +1,4 @@
+# fetcher.py
 """
 Módulo que contiene las clases encargadas de obtener datos brutos de fuentes externas,
 como APIs o archivos. Estas clases, o "Fetchers", actúan como el primer eslabón
