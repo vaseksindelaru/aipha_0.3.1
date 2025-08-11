@@ -1,10 +1,11 @@
-# En aipha/agents/tools/fetcher_tool.py
+# aipha/agents/tools/fetcher_tool.py
 
 from langchain_core.tools import tool
 from pydantic.v1 import BaseModel, Field
 from typing import List
 import logging
 from datetime import date, timedelta
+from pathlib import Path # Importamos Path para el tipo de retorno
 
 # Importamos las clases necesarias de tu sistema de datos
 from aipha.data_system.api_client import ApiClient
@@ -12,8 +13,7 @@ from aipha.data_system.fetchers import BinanceVisionFetcher
 from aipha.data_system.templates.templates import KlinesDataRequestTemplate
 
 # Configuración básica para poder ver los logs de la herramienta
-# Puedes ajustar el nivel de logging a INFO para ver más detalles durante la ejecución
-logging.basicConfig(level=logging.WARNING) 
+logging.basicConfig(level=logging.INFO) # Ajusta a INFO para ver los logs de descarga
 logger = logging.getLogger(__name__)
 
 
@@ -30,7 +30,7 @@ class FetcherInput(BaseModel):
 
 # --- 2. Crear la Herramienta (la función Python que el agente llamará) ---
 @tool(args_schema=FetcherInput)
-def fetch_binance_data(symbol: str, interval: str, days_ago_start: int, days_ago_end: int) -> List[str]:
+def fetch_binance_data(symbol: str, interval: str, days_ago_start: int, days_ago_end: int) -> List[Path]: # Tipo de retorno: List[Path]
     """
     Descarga datos históricos de klines (velas) de Binance Vision
     y devuelve una lista de las rutas a los archivos ZIP descargados localmente.
@@ -42,7 +42,8 @@ def fetch_binance_data(symbol: str, interval: str, days_ago_start: int, days_ago
         # Instanciamos ApiClient y BinanceVisionFetcher.
         # `base_url` se establece en el fetcher, el ApiClient solo necesita una instancia.
         api_client = ApiClient(base_url="") 
-        fetcher = BinanceVisionFetcher(api_client=api_client, download_dir="./temp_download_cache") # Usamos un directorio temporal para las descargas de prueba
+        # Directorio de descarga alineado con el test
+        fetcher = BinanceVisionFetcher(api_client=api_client, download_dir="./temp_test_data")
 
         # --- Calculamos las fechas a partir de 'days_ago_start' y 'days_ago_end' ---
         today = date.today()
@@ -61,18 +62,19 @@ def fetch_binance_data(symbol: str, interval: str, days_ago_start: int, days_ago
         # --- Ejecución del Fetcher (el corazón de la herramienta) ---
         local_file_paths = fetcher.ensure_data_is_downloaded(template)
         
-        # Devolvemos las rutas como strings para que sea más fácil de procesar por el LLM
-        return [str(path) for path in local_file_paths]
+        # Devolvemos la lista de objetos Path directamente
+        return local_file_paths
 
     except Exception as e:
         logger.error(f"Error ejecutando la herramienta fetch_binance_data: {e}")
-        return [f"Error: {e}"]
+        # En caso de error, devolver una lista con un Path que indique el error
+        return [Path(f"Error_during_fetch: {e}")]
 
 # Bloque para probar la herramienta directamente (opcional, para depuración manual)
 if __name__ == "__main__":
     print("--- Probando fetch_binance_data directamente ---")
     # Descargar klines de BTCUSDT 1d para los últimos 3 días (hoy=0, ayer=1, anteayer=2)
-    # Esto creará un directorio 'temp_download_cache' en la raíz de tu proyecto.
+    # Esto creará un directorio 'temp_test_data' en la raíz de tu proyecto.
     test_result = fetch_binance_data(symbol="BTCUSDT", interval="1d", days_ago_start=2, days_ago_end=0)
     print("\nResultados de la descarga:")
     for f in test_result:

@@ -23,6 +23,7 @@ class AgentState(TypedDict):
 
 # --- 2. Definir los Nodos del Grafo ---
 
+
 def execute_fetch_tool_node(state: AgentState) -> AgentState:
     """
     Nodo encargado de extraer los parámetros de la plantilla
@@ -38,19 +39,22 @@ def execute_fetch_tool_node(state: AgentState) -> AgentState:
     days_ago_start = (today - template.start_date).days
     days_ago_end = (today - template.end_date).days
 
-    # Llamamos directamente a nuestra herramienta 'fetch_binance_data'.
-    # La herramienta se encarga de usar el BinanceVisionFetcher interno.
-    downloaded_files = fetch_binance_data(
-        symbol=template.symbol,
-        interval=template.interval,
-        days_ago_start=days_ago_start,
-        days_ago_end=days_ago_end
-    )
+    # Preparamos los argumentos de la herramienta en un diccionario
+    tool_arguments = {
+        "symbol": template.symbol,
+        "interval": template.interval,
+        "days_ago_start": days_ago_start,
+        "days_ago_end": days_ago_end
+    }
+    
+    # Llamamos a la herramienta pasando el diccionario de argumentos
+    downloaded_files = fetch_binance_data.run(tool_arguments)
     
     # Actualizamos el estado del agente con las rutas de los archivos descargados.
     state["files"] = downloaded_files
     logger.info(f"DataFetchingAgent: Archivos descargados y añadidos al estado: {downloaded_files}")
     return state
+
 
 # --- 3. Construir el Grafo (El Plano del Agente) ---
 
